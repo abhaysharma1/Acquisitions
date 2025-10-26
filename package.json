@@ -23,7 +23,8 @@
     "format:check": "prettier --check .",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "dev:docker": "cmd /c \"\"C:\\Program Files\\Git\\bin\\bash.exe\" scripts/dev.sh\"",
+    "prod:docker": "cmd /c \"\"C:\\Program Files\\Git\\bin\\bash.exe\" scripts/prod.sh\""
   },
   "repository": {
     "type": "git",
