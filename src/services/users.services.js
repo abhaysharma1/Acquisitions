@@ -3,7 +3,7 @@ import { db } from '#config/database.js';
 import { eq } from 'drizzle-orm';
 import { users } from '#models/user.models.js';
 
-export const getAllUsers = async params => {
+export const getAllUsers = async () => {
   try {
     return await db
       .select({
