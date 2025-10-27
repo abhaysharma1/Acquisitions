@@ -16,5 +16,5 @@ router.put('/:id', authenticate, updateUserById);
 // Delete user (authenticated users - own profile or admin)
 router.delete('/:id', authenticate, deleteUserById);
 
-export default router
+export default router;
  
