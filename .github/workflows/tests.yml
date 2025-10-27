@@ -1,0 +1,100 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, staging]
+  pull_request:
+    branches: [main, staging]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        id: tests
+        run: |
+          npm test 2>&1 | tee test-output.txt
+          echo "test_exit_code=${PIPESTATUS[0]}" >> $GITHUB_OUTPUT
+        env:
+          NODE_ENV: test
+          NODE_OPTIONS: --experimental-vm-modules
+          DATABASE_URL: sqlite://:memory:
+        continue-on-error: true
+
+      - name: Upload coverage reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-reports
+          path: |
+            coverage/
+            **/*.lcov
+            **/*coverage*.xml
+            **/*coverage*.json
+          retention-days: 30
+          if-no-files-found: ignore
+
+      - name: Generate GitHub Summary
+        if: always()
+        run: |
+          echo "## Test Results 🧪" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ steps.tests.outputs.test_exit_code }}" == "0" ]; then
+            echo "✅ **Tests passed successfully!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            
+            # Try to extract test summary from output
+            if grep -q "Tests:" test-output.txt; then
+              echo "### Test Summary" >> $GITHUB_STEP_SUMMARY
+              grep -E "(Tests:|Suites:|Time:|passed|failed|skipped)" test-output.txt | head -10 >> $GITHUB_STEP_SUMMARY || true
+            fi
+            
+            # Check for coverage information
+            if grep -q "coverage" test-output.txt; then
+              echo "" >> $GITHUB_STEP_SUMMARY
+              echo "### Coverage Information" >> $GITHUB_STEP_SUMMARY
+              grep -A 5 -B 1 -i "coverage" test-output.txt | head -15 >> $GITHUB_STEP_SUMMARY || true
+            fi
+          else
+            echo "❌ **Tests failed!**" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Please check the test output below for details:" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "```" >> $GITHUB_STEP_SUMMARY
+            tail -50 test-output.txt >> $GITHUB_STEP_SUMMARY || echo "Could not retrieve test output" >> $GITHUB_STEP_SUMMARY
+            echo "```" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      - name: Annotate test failures
+        if: steps.tests.outputs.test_exit_code != '0'
+        run: |
+          echo "::error title=Tests Failed::One or more tests failed. Check the test output for details."
+          
+          # Try to extract and annotate specific test failures
+          if grep -n -B2 -A2 "FAIL\|Error:\|Failed:" test-output.txt > failures.txt; then
+            echo "::group::Test Failures"
+            cat failures.txt | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            echo "::endgroup::"
+          fi
+
+      - name: Fail workflow if tests failed
+        if: steps.tests.outputs.test_exit_code != '0'
+        run: |
+          echo "Tests failed with exit code ${{ steps.tests.outputs.test_exit_code }}"
+          exit 1
